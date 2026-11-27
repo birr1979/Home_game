@@ -5,6 +5,8 @@ There are no scores and no rules. You explore three rooms and play with whatever
 
 ## How to play
 
+The game opens on a title screen. Tap **Play** to start, or **How to play** for an 8-step picture guide; the **?** button in the game opens the guide again.
+
 - **Drag anyone or anything.** Things drop onto beds, shelves, tables and the floor.
 - **Feed a friend:** drop food on their mouth.
 - **Dress up:** drop a hat, crown or bow on someone's head.

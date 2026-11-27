@@ -638,8 +638,12 @@
     clampCam();
     applyCam();
   }
-  let rotateDismissed = false;
-  setTimeout(() => { rotateDismissed = true; $('#rotate').hidden = true; }, 6000);
+  let rotateDismissed = true; // the "turn sideways" tip shows briefly once the game starts
+  function showRotateTip() {
+    rotateDismissed = false;
+    resize();
+    setTimeout(() => { rotateDismissed = true; $('#rotate').hidden = true; }, 6000);
+  }
 
   function updateUI() {
     const r = currentRoom();
@@ -845,6 +849,118 @@
     $('#install').hidden = true;
   });
   addEventListener('appinstalled', () => { $('#install').hidden = true; });
+
+  /* ================= Intro screen and how-to-play steps ================= */
+  const artHTML = (token, big = 1) => {
+    const a = ART[token];
+    if (a) {
+      // characters fill the height; small items are drawn larger so they read clearly
+      const h = a.char ? (a.h / 220) * 100 : Math.min(100, (a.h / 220) * 100 * 1.8);
+      return `<span class="art" style="height:calc(${(h * big).toFixed(1)}% * var(--k, 1));aspect-ratio:${a.w}/${a.h}">${a.svg}</span>`;
+    }
+    return /^[➜‹›↺]$/.test(token) ? `<span class="sym">${token}</span>` : `<span class="emo">${token}</span>`;
+  };
+
+  const STEPS = [
+    { art: ['kid-pip', '👆'], title: 'Pick up a friend',
+      text: 'Touch a friend and move your finger to carry them anywhere. Let go to put them down.' },
+    { art: ['apple', '➜', 'kid-mo'], title: 'Feed your friends',
+      text: 'Drag food onto a friend’s mouth. Munch munch! The cat likes snacks too.' },
+    { art: ['crown', 'teddy', '➜', 'kid-juno'], title: 'Dress up and share',
+      text: 'Drop a hat, crown or bow on a friend’s head. Drop a toy on their hand to give it to them.' },
+    { art: ['kid-bo', '💤'], title: 'Bedtime',
+      text: 'Put a friend on the bed and they fall asleep. Pick them up to wake them.' },
+    { art: ['👆', 'partyhat', 'cheese', 'ball', 'cake'], title: 'Tap to find surprises',
+      text: 'Tap the wardrobe, toy box, fridge and oven to make new things pop out. In the garden, tap the apple tree and the flower bush.' },
+    { art: ['💡', '☀️', '🌙'], title: 'Day and night',
+      text: 'Tap a lamp to turn the lights off and on. Tap the sun in the garden to make it night.' },
+    { art: ['‹', '🛏️', '🍳', '🌳', '›'], title: 'Visit every room',
+      text: 'Swipe the background, or tap the arrows and room buttons, to visit the bedroom, kitchen and garden.' },
+    { art: ['🎵', '🔊', '↺'], title: 'Handy buttons',
+      text: '🎵 turns the music on or off. 🔊 turns all sounds on or off. ↺ starts the town over. Your town saves itself, so come back anytime!' },
+  ];
+
+  const intro = $('#intro'), howto = $('#howto');
+  let started = false, step = 0, lastFocus = null;
+
+  // Shrinks a row of pictures (via the --k CSS variable) until it fits its box.
+  function fitRow(row) {
+    if (!row || !row.offsetParent) return;
+    row.style.setProperty('--k', '1');
+    const cs = getComputedStyle(row);
+    const kids = [...row.children];
+    const used = kids.reduce((w, k) => w + k.offsetWidth, 0) + (parseFloat(cs.columnGap) || 0) * Math.max(0, kids.length - 1);
+    const avail = row.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    if (used > avail && used > 0) row.style.setProperty('--k', (avail / used * 0.96).toFixed(3));
+  }
+  const fitRows = () => { fitRow($('#introFriends')); fitRow($('#stepArt')); };
+  addEventListener('resize', fitRows);
+
+  $('#introFriends').innerHTML = ['kid-juno', 'kid-mo', 'kid-pip', 'cat', 'kid-bo'].map((k) => artHTML(k)).join('');
+  requestAnimationFrame(fitRows);
+
+  const dots = $('#stepDots');
+  dots.innerHTML = STEPS.map((_, i) => `<button aria-label="Step ${i + 1}"></button>`).join('');
+  dots.querySelectorAll('button').forEach((b, i) => b.addEventListener('click', () => showStep(i)));
+
+  function showStep(i) {
+    step = clamp(i, 0, STEPS.length - 1);
+    const s = STEPS[step];
+    $('#stepArt').innerHTML = s.art.map((t) => artHTML(t)).join('');
+    requestAnimationFrame(() => fitRow($('#stepArt')));
+    $('#stepCount').textContent = `Step ${step + 1} of ${STEPS.length}`;
+    $('#stepTitle').textContent = s.title;
+    $('#stepText').textContent = s.text;
+    $('#stepPrev').disabled = step === 0;
+    $('#stepNext').textContent = step === STEPS.length - 1 ? 'Let’s play!' : 'Next';
+    dots.querySelectorAll('button').forEach((b, j) => {
+      b.classList.toggle('active', j === step);
+      if (j === step) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    });
+  }
+
+  function openHowTo() {
+    lastFocus = document.activeElement;
+    showStep(0);
+    howto.hidden = false;
+    $('#stepNext').focus();
+    sfx.click();
+  }
+  function closeHowTo() {
+    howto.hidden = true;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  function startGame() {
+    if (started) return;
+    started = true;
+    audio(); // this tap unlocks sound on iPhone, so the music starts with the game
+    sfx.spawn();
+    intro.classList.add('leaving');
+    setTimeout(() => { intro.hidden = true; }, 520);
+    showRotateTip();
+  }
+
+  $('#playBtn').addEventListener('click', startGame);
+  $('#howBtn').addEventListener('click', openHowTo);
+  $('#help').addEventListener('click', openHowTo);
+  $('#howClose').addEventListener('click', closeHowTo);
+  $('#stepPrev').addEventListener('click', () => { showStep(step - 1); sfx.click(); });
+  $('#stepNext').addEventListener('click', () => {
+    if (step < STEPS.length - 1) { showStep(step + 1); sfx.click(); return; }
+    closeHowTo();
+    startGame();
+  });
+  howto.addEventListener('click', (ev) => { if (ev.target === howto) closeHowTo(); }); // tap outside the card
+  addEventListener('keydown', (ev) => {
+    if (!howto.hidden) {
+      if (ev.key === 'Escape') closeHowTo();
+      else if (ev.key === 'ArrowRight') showStep(step + 1);
+      else if (ev.key === 'ArrowLeft') showStep(step - 1);
+    } else if (!started && (ev.key === 'Enter' || ev.key === ' ') && document.activeElement === document.body) {
+      startGame();
+    }
+  });
 
   /* ================= Start ================= */
   buildWorld();

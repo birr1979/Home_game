@@ -28,11 +28,39 @@
     </nav>
     <div id="tools">
       <button class="btn small" id="install" hidden aria-label="Install app">⬇️</button>
+      <button class="btn small" id="help" aria-label="How to play">?</button>
       <button class="btn small" id="music" aria-label="Music on or off" aria-pressed="true">🎵</button>
       <button class="btn small" id="mute" aria-label="Sound on or off">🔊</button>
       <button class="btn small" id="reset" aria-label="Start over">↺</button>
     </div>
   </div>
+
+  <section id="intro" class="screen" aria-label="Pocket Town">
+    <div class="intro-inner">
+      <div class="intro-friends" id="introFriends" aria-hidden="true"></div>
+      <h1 class="logo">Pocket <span>Town</span></h1>
+      <button class="big-btn play" id="playBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5Z"/></svg>
+        Play
+      </button>
+      <button class="big-btn how" id="howBtn">How to play</button>
+    </div>
+  </section>
+
+  <section id="howto" class="screen" role="dialog" aria-modal="true" aria-labelledby="stepTitle" hidden>
+    <div class="card">
+      <button class="close" id="howClose" aria-label="Close">✕</button>
+      <div class="step-art" id="stepArt" aria-hidden="true"></div>
+      <p class="step-count" id="stepCount"></p>
+      <h2 id="stepTitle"></h2>
+      <p class="step-text" id="stepText"></p>
+      <div class="step-nav">
+        <button class="nav-btn" id="stepPrev">Back</button>
+        <div class="step-dots" id="stepDots"></div>
+        <button class="nav-btn primary" id="stepNext">Next</button>
+      </div>
+    </div>
+  </section>
 
   <div id="rotate" hidden>Turn your device sideways for a bigger town ↻</div>
 
