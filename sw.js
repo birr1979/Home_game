@@ -1,5 +1,5 @@
-// Offline support. Bump CACHE whenever you change any file so players get the update.
-const CACHE = 'pocket-town-v2';
+// Offline support. Bump CACHE whenever you change any file.
+const CACHE = 'pocket-town-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -23,17 +23,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Serve from the cache straight away, and refresh the cached copy in the background.
+// Network first, so players always get the newest version when online;
+// fall back to the cached copy when offline.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(req, { ignoreSearch: true });
-      const network = fetch(req)
-        .then((res) => { if (res.ok) cache.put(req, res.clone()); return res; })
-        .catch(() => cached || (req.mode === 'navigate' ? cache.match('./index.html') : undefined));
-      return cached || network;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+        return res;
+      })
+      .catch(async () => {
+        const cached = await caches.match(req, { ignoreSearch: true });
+        if (cached) return cached;
+        if (req.mode === 'navigate') return (await caches.match('./index.html')) || Response.error();
+        return Response.error();
+      })
   );
 });

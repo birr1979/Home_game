@@ -184,11 +184,44 @@
   let muted = false;
   try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (_) { /* storage blocked */ }
 
+  // iPhones mute web-page audio when the ring/silent switch is on, unless the page
+  // declares it is playing media. iOS 17+: the Audio Session API. Older iOS: keep a
+  // silent <audio> element looping, which moves the page into the "playback" category.
+  const hasAudioSession = 'audioSession' in navigator;
+  let silentEl = null;
+  function silentWavUrl() {
+    const rate = 8000, n = rate / 2; // half a second of 16-bit mono silence
+    const v = new DataView(new ArrayBuffer(44 + n * 2));
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, n * 2, true);
+    return URL.createObjectURL(new Blob([v.buffer], { type: 'audio/wav' }));
+  }
+  function keepPlaybackSession() {
+    if (hasAudioSession) {
+      try { navigator.audioSession.type = 'playback'; } catch (_) { /* ignore */ }
+      return;
+    }
+    try {
+      if (!silentEl) {
+        silentEl = new Audio(silentWavUrl());
+        silentEl.loop = true;
+        silentEl.setAttribute('playsinline', '');
+      }
+      if (silentEl.paused) silentEl.play().catch(() => { /* needs a later tap */ });
+    } catch (_) { /* ignore */ }
+  }
+
   function audio() {
+    if (document.hidden) return;
+    keepPlaybackSession();
     if (!actx) {
       try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return; }
     }
-    if (actx.state === 'suspended') actx.resume();
+    // Safari can also leave the context "interrupted" (calls, alarms, app switches).
+    if (actx.state !== 'running') { const p = actx.resume(); if (p && p.catch) p.catch(() => {}); }
     startMusic();
   }
   function tone(f, dur, type = 'sine', vol = 0.16, f2 = null, delay = 0) {
@@ -357,7 +390,10 @@
   }
 
   // Pause when the app is in the background; carry on when it comes back.
-  addEventListener('visibilitychange', () => { if (document.hidden) stopMusic(); else if (actx) audio(); });
+  addEventListener('visibilitychange', () => {
+    if (document.hidden) { stopMusic(); if (silentEl) silentEl.pause(); }
+    else if (actx) audio();
+  });
   // iOS only unlocks audio inside certain gestures, so try on these too.
   for (const evt of ['touchend', 'click', 'keydown']) addEventListener(evt, audio, { passive: true });
 
@@ -823,5 +859,11 @@
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    // When an update takes over, reload once so the new version runs straight away.
+    let hadController = !!navigator.serviceWorker.controller, reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController && !reloading) { reloading = true; save(); location.reload(); }
+      hadController = true;
+    });
   }
 })();
