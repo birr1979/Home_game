@@ -1,0 +1,186 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #2b2140;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#stage { position: fixed; inset: 0; overflow: hidden; }
+
+#world {
+  position: absolute;
+  left: 0; top: 0;
+  width: 3000px; height: 700px;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* ---------- Rooms ---------- */
+.room { position: absolute; top: 0; width: 1000px; height: 700px; overflow: hidden; }
+.room .floor { position: absolute; left: 0; right: 0; top: 540px; bottom: 0; }
+
+.room-0 {
+  background:
+    radial-gradient(circle at 30px 30px, #ffc9d6 7px, transparent 8px) 0 0 / 60px 60px,
+    #ffe4eb;
+}
+.room-0 .floor {
+  border-top: 12px solid #fff;
+  background: repeating-linear-gradient(90deg, #dcaa72 0 118px, #c8935a 118px 122px);
+}
+
+.room-1 {
+  background:
+    linear-gradient(#cfeedd 3px, transparent 3px) 0 0 / 50px 50px,
+    linear-gradient(90deg, #cfeedd 3px, transparent 3px) 0 0 / 50px 50px,
+    #e9f8f0;
+}
+.room-1 .floor {
+  border-top: 12px solid #fff;
+  background: conic-gradient(#fff 25%, #ffd8a8 0 50%, #fff 0 75%, #ffd8a8 0) 0 0 / 80px 80px;
+}
+
+.room-2 { background: linear-gradient(#86cfff, #dff4ff 75%); }
+.room-2 .floor { top: 520px; background: linear-gradient(#86d870, #5cb85c); border-top: 8px solid #6fcb5d; }
+
+/* ---------- Things in the world ---------- */
+.ent, .furn, .deco, .fx { position: absolute; left: 0; top: 0; }
+.ent svg, .furn svg, .deco svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.deco { pointer-events: none; }
+.ent { cursor: grab; }
+.furn.tappable { cursor: pointer; }
+
+.ent svg { transform-origin: 50% 100%; }
+.ent.dragging { cursor: grabbing; }
+.ent.dragging svg { transform-origin: 50% 0; animation: dangle .5s ease-in-out infinite alternate; }
+.ent.land svg { animation: squash .3s ease-out; }
+.ent.pop svg { animation: popin .35s ease-out; }
+.ent.hop svg { animation: hop .45s ease-out; }
+.ent.gone svg { animation: shrink .3s ease-in forwards; }
+
+@keyframes dangle { from { transform: rotate(-6deg) scale(1.06); } to { transform: rotate(6deg) scale(1.06); } }
+@keyframes squash { 0% { transform: scale(1.12, .86); } 60% { transform: scale(.95, 1.05); } 100% { transform: none; } }
+@keyframes popin { 0% { transform: scale(.2); } 70% { transform: scale(1.15); } 100% { transform: none; } }
+@keyframes hop { 0%, 100% { transform: none; } 40% { transform: translateY(-34px) scale(.96, 1.04); } 80% { transform: scale(1.08, .92); } }
+@keyframes shrink { to { transform: scale(0); opacity: 0; } }
+
+/* Faces */
+.char .eyes { transform-box: fill-box; transform-origin: center; animation: blink 4.2s infinite; }
+.char:nth-child(2n) .eyes { animation-delay: 1.3s; }
+.char:nth-child(3n) .eyes { animation-delay: 2.6s; }
+@keyframes blink { 0%, 93%, 100% { transform: none; } 96% { transform: scaleY(.1); } }
+.char .m-open { display: none; }
+.char.dragging .m-open, .char.chomp .m-open { display: inline; }
+.char.dragging .m-smile, .char.chomp .m-smile { display: none; }
+.char.chomp .m-open { transform-box: fill-box; transform-origin: center; animation: chomp .22s infinite alternate; }
+@keyframes chomp { to { transform: scaleY(.25); } }
+.char.sleep .eyes { animation: none; transform: scaleY(.12); }
+.char.sleep:not(.dragging) .m-smile { display: none; }
+
+.zzz {
+  display: none; position: absolute; right: -6px; top: -24px;
+  font: 900 26px/1 system-ui, sans-serif; color: #7b5cff; pointer-events: none;
+}
+.char.sleep:not(.dragging) .zzz { display: block; animation: zzz 2s ease-in-out infinite; }
+@keyframes zzz { 0% { transform: translate(0, 10px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(18px, -24px); opacity: 0; } }
+
+/* Furniture states */
+.furn.wiggle svg { animation: wiggle .4s ease-in-out; transform-origin: 50% 100%; }
+@keyframes wiggle { 25% { transform: rotate(-2deg) scale(1.02); } 75% { transform: rotate(2deg) scale(1.02); } }
+.furn .glow { transition: opacity .4s; }
+.furn.off .glow { opacity: 0; }
+.furn.off .bulb { fill: #c9c3d6; }
+.furn .door { transform-box: fill-box; transform-origin: 0 50%; transition: transform .25s; }
+.furn.open .door { transform: scaleX(.15); }
+.furn .lid { transform-box: fill-box; transform-origin: 0 100%; transition: transform .2s; }
+.furn.open .lid { transform: rotate(-35deg); }
+.furn .moon { display: none; }
+.furn.off .moon { display: inline; }
+.furn.off .sunface { display: none; }
+.furn .rays { transform-box: fill-box; transform-origin: center; animation: spin 18s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.deco.cloud { animation: drift 30s ease-in-out infinite alternate; }
+@keyframes drift { to { translate: 140px 0; } }
+
+/* Night shades (sit above everything except what is being dragged) */
+.shade {
+  position: absolute; top: 0; width: 1000px; height: 700px;
+  background: rgba(22, 18, 70, .58);
+  opacity: 0; transition: opacity .6s; pointer-events: none; z-index: 60000;
+}
+.shade.garden {
+  background:
+    radial-gradient(circle at 120px 80px, #fff 1.5px, transparent 2.5px),
+    radial-gradient(circle at 520px 140px, #fff 1.5px, transparent 2.5px),
+    radial-gradient(circle at 330px 50px, #fff 2px, transparent 3px),
+    radial-gradient(circle at 700px 200px, #fff 1.5px, transparent 2.5px),
+    radial-gradient(circle at 880px 260px, #fff 1.5px, transparent 2.5px),
+    rgba(18, 20, 70, .62);
+}
+.shade.on { opacity: 1; }
+
+/* Little effects */
+.fx {
+  z-index: 100002; pointer-events: none;
+  font: 900 30px/1 system-ui, sans-serif;
+  animation: floatup 1.1s ease-out forwards;
+}
+@keyframes floatup { 0% { transform: translate(-50%, 0) scale(.4); opacity: 0; } 20% { opacity: 1; transform: translate(-50%, -10px) scale(1.1); } 100% { transform: translate(-50%, -70px) scale(1); opacity: 0; } }
+
+/* ---------- UI ---------- */
+#ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+.btn {
+  pointer-events: auto;
+  border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, .88);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, .18);
+  border-radius: 999px;
+  font: 700 22px/1 system-ui, sans-serif; color: #4a3a6b;
+  display: grid; place-items: center;
+  touch-action: manipulation;
+  transition: transform .1s;
+}
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, .18); }
+.btn:focus-visible { outline: 3px solid #7b5cff; outline-offset: 2px; }
+.arrow {
+  position: absolute; top: 50%; width: 58px; height: 58px; margin-top: -29px;
+  font-size: 44px; padding-bottom: 6px;
+}
+#prev { left: max(12px, env(safe-area-inset-left)); }
+#next { right: max(12px, env(safe-area-inset-right)); }
+.arrow[disabled] { opacity: 0; pointer-events: none; }
+#dots {
+  position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%); display: flex; gap: 10px;
+}
+.dot { width: 48px; height: 48px; font-size: 22px; opacity: .7; }
+.dot.active { opacity: 1; background: #fff; outline: 3px solid #7b5cff; }
+#tools {
+  position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right));
+  display: flex; gap: 8px;
+}
+.small { width: 44px; height: 44px; font-size: 20px; }
+#tools [hidden] { display: none; }
+
+#rotate {
+  position: fixed; left: 50%; top: max(14px, env(safe-area-inset-top)); transform: translateX(-50%);
+  z-index: 20; padding: 10px 16px; border-radius: 999px;
+  background: #fff; color: #4a3a6b; font: 700 15px/1.2 system-ui, sans-serif;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, .18); white-space: nowrap; pointer-events: none;
+  transition: opacity .5s;
+}
+#rotate[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .deco.cloud, .furn .rays { animation: none; }
+}

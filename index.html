@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Pocket Town</title>
+  <meta name="description" content="A pretend-play sandbox: drag the friends around their house, kitchen and garden, feed them, dress them up and tuck them into bed.">
+  <meta name="theme-color" content="#7b5cff">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Pocket Town">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="stage"><div id="world"></div></div>
+
+  <div id="ui">
+    <button class="btn arrow" id="prev" aria-label="Previous room">&#8249;</button>
+    <button class="btn arrow" id="next" aria-label="Next room">&#8250;</button>
+    <nav id="dots" aria-label="Rooms">
+      <button class="btn dot" data-room="0" aria-label="Bedroom">🛏️</button>
+      <button class="btn dot" data-room="1" aria-label="Kitchen">🍳</button>
+      <button class="btn dot" data-room="2" aria-label="Garden">🌳</button>
+    </nav>
+    <div id="tools">
+      <button class="btn small" id="install" hidden aria-label="Install app">⬇️</button>
+      <button class="btn small" id="mute" aria-label="Sound on or off">🔊</button>
+      <button class="btn small" id="reset" aria-label="Start over">↺</button>
+    </div>
+  </div>
+
+  <div id="rotate" hidden>Turn your device sideways for a bigger town ↻</div>
+
+  <script src="game.js"></script>
+</body>
+</html>
