@@ -189,16 +189,26 @@
   // silent <audio> element looping, which moves the page into the "playback" category.
   const hasAudioSession = 'audioSession' in navigator;
   let silentEl = null;
-  function silentWavUrl() {
-    const rate = 8000, n = rate / 2; // half a second of 16-bit mono silence
+  // Encodes mono samples (-1..1) as a 16-bit WAV and returns an object URL.
+  // `peakTo` scales the loudest sample to that level (0 = leave as is).
+  function wavUrl(samples, rate, peakTo = 0) {
+    const n = samples.length;
+    let k = 1;
+    if (peakTo) {
+      let peak = 0;
+      for (let i = 0; i < n; i++) { const a = Math.abs(samples[i]); if (a > peak) peak = a; }
+      if (peak > 0) k = peakTo / peak;
+    }
     const v = new DataView(new ArrayBuffer(44 + n * 2));
     const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
     str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
     v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
     v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
     str(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i] * k)) * 32767, true);
     return URL.createObjectURL(new Blob([v.buffer], { type: 'audio/wav' }));
   }
+  const silentWavUrl = () => wavUrl(new Float32Array(4000), 8000); // half a second of silence
   function keepPlaybackSession() {
     if (hasAudioSession) {
       try { navigator.audioSession.type = 'playback'; } catch (_) { /* ignore */ }
@@ -217,12 +227,12 @@
   function audio() {
     if (document.hidden) return;
     keepPlaybackSession();
+    startMusic();
     if (!actx) {
       try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return; }
     }
     // Safari can also leave the context "interrupted" (calls, alarms, app switches).
     if (actx.state !== 'running') { const p = actx.resume(); if (p && p.catch) p.catch(() => {}); }
-    startMusic();
   }
   function tone(f, dur, type = 'sine', vol = 0.16, f2 = null, delay = 0) {
     if (!actx || muted) return;
@@ -301,93 +311,83 @@
   ];
 
   const MUSIC_KEY = 'pocket-town-music';
-  const music = { on: true, playing: false, idx: 0, voices: [], timer: 0, bus: null, pauseUntil: 0 };
+  const music = { on: true, el: null };
   try { music.on = localStorage.getItem(MUSIC_KEY) !== '0'; } catch (_) { /* storage blocked */ }
 
-  function musicBus() {
-    if (!music.bus) {
-      const lp = actx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 3200;
-      music.bus = actx.createGain();
-      music.bus.gain.value = 0;
-      music.bus.connect(lp).connect(actx.destination);
-    }
-    return music.bus;
-  }
-
   // One music-box note: a sine with a quiet octave overtone and a gentle decay.
-  function pluck(f, t, dur, vol) {
+  function pluck(ctx, dest, f, t, dur, vol) {
     const ring = Math.max(dur * 1.8, 0.6);
-    const g = actx.createGain();
+    const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + ring);
-    g.connect(musicBus());
-    const o1 = actx.createOscillator();
+    g.connect(dest);
+    const o1 = ctx.createOscillator();
     o1.type = 'sine';
     o1.frequency.value = f;
     o1.connect(g);
-    const o2 = actx.createOscillator(), g2 = actx.createGain();
+    const o2 = ctx.createOscillator(), g2 = ctx.createGain();
     o2.type = 'triangle';
     o2.frequency.value = f * 2;
     g2.gain.value = 0.12;
-    o2.connect(g2).connect(g);
+    o2.connect(g2);
+    g2.connect(g);
     for (const o of [o1, o2]) { o.start(t); o.stop(t + ring + 0.05); }
   }
 
-  function beginPiece(t0) {
-    const p = PIECES[music.idx];
-    music.voices = [
-      { notes: p.melody, i: 0, t: t0, vol: 0.22 },
-      { notes: p.bass, i: 0, t: t0, vol: 0.13 },
-    ];
-  }
-
-  // Look-ahead scheduler: queues the next ~0.4 s of notes on the audio clock.
-  function scheduleMusic() {
-    if (!music.playing || !actx) return;
-    const now = actx.currentTime, ahead = now + 0.4;
-    const spb = 60 / PIECES[music.idx].bpm;
-    let finished = true;
-    for (const v of music.voices) {
-      while (v.i < v.notes.length && v.t < ahead) {
-        const [n, beats] = v.notes[v.i];
-        if (n) pluck(freq(n), Math.max(v.t, now), beats * spb, v.vol);
-        v.t += beats * spb;
-        v.i++;
+  // Records the whole playlist once into a WAV (about two minutes) and plays it on a
+  // looping <audio> element. Media elements are the most reliable way to play long
+  // music on iPhone, and they keep playing when the ring/silent switch is on.
+  function renderMusic() {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) return Promise.resolve(null);
+    const rate = 22050, GAP = 2.5;
+    const beats = (notes) => notes.reduce((sum, [, d]) => sum + d, 0);
+    let total = 0.3;
+    const plan = PIECES.map((p) => {
+      const spb = 60 / p.bpm, start = total;
+      total += Math.max(beats(p.melody), beats(p.bass)) * spb + GAP;
+      return { p, spb, start };
+    });
+    const oc = new OAC(1, Math.ceil(total * rate), rate);
+    const lp = oc.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 3200;
+    lp.connect(oc.destination);
+    for (const { p, spb, start } of plan) {
+      for (const [notes, vol] of [[p.melody, 0.3], [p.bass, 0.17]]) {
+        let t = start;
+        for (const [n, b] of notes) { if (n) pluck(oc, lp, freq(n), t, b * spb, vol); t += b * spb; }
       }
-      if (v.i < v.notes.length) finished = false;
     }
-    if (finished && now > Math.max(...music.voices.map((v) => v.t)) + 2.5) {
-      music.idx = (music.idx + 1) % PIECES.length; // short pause, then the next piece
-      beginPiece(now + 0.1);
-    }
+    return new Promise((resolve, reject) => {
+      oc.oncomplete = (e) => resolve(wavUrl(e.renderedBuffer.getChannelData(0), rate, 0.32));
+      const r = oc.startRendering(); // a promise in newer browsers, nothing in older Safari
+      if (r && r.catch) r.catch(reject);
+    });
   }
 
   function startMusic() {
-    if (!actx || muted || !music.on || music.playing || document.hidden) return;
-    music.playing = true;
-    const bus = musicBus(), t = actx.currentTime;
-    bus.gain.cancelScheduledValues(t);
-    bus.gain.setValueAtTime(bus.gain.value, t);
-    bus.gain.linearRampToValueAtTime(0.55, t + 1.2);
-    beginPiece(t + 0.15);
-    music.timer = setInterval(scheduleMusic, 100);
-    scheduleMusic();
+    if (!music.el || muted || !music.on || document.hidden || !music.el.paused) return;
+    const p = music.el.play();
+    if (p && p.catch) p.catch(() => { /* not allowed yet: the next tap will try again */ });
+  }
+  function stopMusic() {
+    if (music.el && !music.el.paused) music.el.pause();
   }
 
-  function stopMusic() {
-    if (!music.playing) return;
-    music.playing = false;
-    clearInterval(music.timer);
-    if (actx && music.bus) {
-      const t = actx.currentTime;
-      music.bus.gain.cancelScheduledValues(t);
-      music.bus.gain.setValueAtTime(music.bus.gain.value, t);
-      music.bus.gain.linearRampToValueAtTime(0, t + 0.3);
+  renderMusic().then((url) => {
+    if (!url) return;
+    const el = new Audio(url);
+    el.loop = true;
+    el.preload = 'auto';
+    el.setAttribute('playsinline', '');
+    music.el = el;
+    if ('mediaSession' in navigator && window.MediaMetadata) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: 'Pocket Town music', artist: 'Mozart · Bach · Brahms · Beethoven' });
     }
-  }
+    startMusic(); // plays now if the player has already tapped (otherwise on the next tap)
+  }).catch(() => { /* no music on this browser; the game still works */ });
 
   // Pause when the app is in the background; carry on when it comes back.
   addEventListener('visibilitychange', () => {
