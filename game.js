@@ -189,6 +189,7 @@
       try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return; }
     }
     if (actx.state === 'suspended') actx.resume();
+    startMusic();
   }
   function tone(f, dur, type = 'sine', vol = 0.16, f2 = null, delay = 0) {
     if (!actx || muted) return;
@@ -215,6 +216,150 @@
     giggle: () => [700, 900, 760, 980].forEach((f, i) => tone(f, 0.07, 'sine', 0.08, f * 1.2, i * 0.07)),
     meow: () => tone(700, 0.35, 'sawtooth', 0.04, 420),
   };
+
+  /* ================= Background music =================
+   * Public-domain classical melodies played on a soft synthesised music box.
+   * Notes are written "Name+octave:beats", e.g. "F#5:.5"; "-" is a rest.
+   */
+  const seq = (s) => s.trim().split(/\s+/).map((t) => { const [n, d] = t.split(':'); return [n === '-' ? null : n, +d]; });
+  const freq = (n) => {
+    const m = /^([A-G])([#b]?)(\d)$/.exec(n);
+    const semi = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+    return 440 * Math.pow(2, (semi + (+m[3] + 1) * 12 - 69) / 12);
+  };
+  const twice = (s) => s + ' ' + s;
+
+  const PIECES = [
+    { // Mozart: theme of the "Ah vous dirai-je, maman" variations (Twinkle Twinkle)
+      bpm: 100,
+      melody: seq(`C5:1 C5:1 G5:1 G5:1 A5:1 A5:1 G5:2 F5:1 F5:1 E5:1 E5:1 D5:1 D5:1 C5:2
+                   G5:1 G5:1 F5:1 F5:1 E5:1 E5:1 D5:2 G5:1 G5:1 F5:1 F5:1 E5:1 E5:1 D5:2
+                   C5:1 C5:1 G5:1 G5:1 A5:1 A5:1 G5:2 F5:1 F5:1 E5:1 E5:1 D5:1 D5:1 C5:2`),
+      bass: seq(`C3:2 C3:2 F3:2 C3:2 F3:2 C3:2 G3:2 C3:2 C3:2 F3:2 C3:2 G3:2
+                 C3:2 F3:2 C3:2 G3:2 C3:2 C3:2 F3:2 C3:2 F3:2 C3:2 G3:2 C3:2`),
+    },
+    { // Bach (attr.) / Petzold: Minuet in G
+      bpm: 126,
+      melody: seq(`D5:1 G4:.5 A4:.5 B4:.5 C5:.5 D5:1 G4:1 G4:1 E5:1 C5:.5 D5:.5 E5:.5 F#5:.5 G5:1 G4:1 G4:1
+                   C5:1 D5:.5 C5:.5 B4:.5 A4:.5 B4:1 C5:.5 B4:.5 A4:.5 G4:.5 F#4:1 G4:.5 A4:.5 B4:.5 G4:.5 A4:3
+                   D5:1 G4:.5 A4:.5 B4:.5 C5:.5 D5:1 G4:1 G4:1 E5:1 C5:.5 D5:.5 E5:.5 F#5:.5 G5:1 G4:1 G4:1
+                   C5:1 D5:.5 C5:.5 B4:.5 A4:.5 B4:1 C5:.5 B4:.5 A4:.5 G4:.5 A4:1 B4:.5 A4:.5 G4:.5 F#4:.5 G4:3`),
+      bass: seq(`G3:3 B3:3 C4:3 B3:3 A3:3 G3:3 D3:3 F#3:3
+                 G3:3 B3:3 C4:3 B3:3 A3:3 G3:3 D3:3 G3:3`),
+    },
+    { // Brahms: Lullaby (Wiegenlied, Op. 49 No. 4)
+      bpm: 80,
+      melody: seq(`E5:.5 E5:.5 G5:2 E5:.5 E5:.5 G5:2 E5:.5 G5:.5 C6:1 B5:1.5 A5:.5 A5:1 G5:2
+                   D5:.5 E5:.5 F5:2 D5:.5 E5:.5 F5:2 D5:.5 F5:.5 B5:1 A5:1 G5:1 B5:1 C6:2
+                   C5:.5 C5:.5 C6:2 A5:.5 F5:.5 G5:2 E5:.5 C5:.5 F5:1 G5:1 A5:1 G5:2
+                   C5:.5 C5:.5 C6:2 A5:.5 F5:.5 G5:2 E5:.5 C5:.5 F5:1 E5:1 D5:1 C5:3`),
+      bass: seq(`-:1 C4:3 C4:3 C4:3 G3:3
+                 G3:3 G3:3 G3:3 G3:2 C4:2
+                 C4:3 F3:3 C4:3 G3:3
+                 C4:3 F3:3 C4:3 G3:2 C4:2`),
+    },
+    { // Beethoven: Für Elise (opening theme), played twice
+      bpm: 92,
+      melody: seq(twice(`E5:.25 D#5:.25 E5:.25 D#5:.25 E5:.25 B4:.25 D5:.25 C5:.25 A4:.75 C4:.25 E4:.25 A4:.25
+                         B4:.75 E4:.25 G#4:.25 B4:.25 C5:.75 E4:.25 E5:.25 D#5:.25 E5:.25 D#5:.25 E5:.25 B4:.25
+                         D5:.25 C5:.25 A4:.75 C4:.25 E4:.25 A4:.25 B4:.75 E4:.25 C5:.25 B4:.25 A4:1.5`)),
+      bass: seq(twice(`-:2 A3:1.5 E3:1.5 A3:1.5 -:1.5 A3:1.5 E3:1.5 A3:1.5`)),
+    },
+  ];
+
+  const MUSIC_KEY = 'pocket-town-music';
+  const music = { on: true, playing: false, idx: 0, voices: [], timer: 0, bus: null, pauseUntil: 0 };
+  try { music.on = localStorage.getItem(MUSIC_KEY) !== '0'; } catch (_) { /* storage blocked */ }
+
+  function musicBus() {
+    if (!music.bus) {
+      const lp = actx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 3200;
+      music.bus = actx.createGain();
+      music.bus.gain.value = 0;
+      music.bus.connect(lp).connect(actx.destination);
+    }
+    return music.bus;
+  }
+
+  // One music-box note: a sine with a quiet octave overtone and a gentle decay.
+  function pluck(f, t, dur, vol) {
+    const ring = Math.max(dur * 1.8, 0.6);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + ring);
+    g.connect(musicBus());
+    const o1 = actx.createOscillator();
+    o1.type = 'sine';
+    o1.frequency.value = f;
+    o1.connect(g);
+    const o2 = actx.createOscillator(), g2 = actx.createGain();
+    o2.type = 'triangle';
+    o2.frequency.value = f * 2;
+    g2.gain.value = 0.12;
+    o2.connect(g2).connect(g);
+    for (const o of [o1, o2]) { o.start(t); o.stop(t + ring + 0.05); }
+  }
+
+  function beginPiece(t0) {
+    const p = PIECES[music.idx];
+    music.voices = [
+      { notes: p.melody, i: 0, t: t0, vol: 0.22 },
+      { notes: p.bass, i: 0, t: t0, vol: 0.13 },
+    ];
+  }
+
+  // Look-ahead scheduler: queues the next ~0.4 s of notes on the audio clock.
+  function scheduleMusic() {
+    if (!music.playing || !actx) return;
+    const now = actx.currentTime, ahead = now + 0.4;
+    const spb = 60 / PIECES[music.idx].bpm;
+    let finished = true;
+    for (const v of music.voices) {
+      while (v.i < v.notes.length && v.t < ahead) {
+        const [n, beats] = v.notes[v.i];
+        if (n) pluck(freq(n), Math.max(v.t, now), beats * spb, v.vol);
+        v.t += beats * spb;
+        v.i++;
+      }
+      if (v.i < v.notes.length) finished = false;
+    }
+    if (finished && now > Math.max(...music.voices.map((v) => v.t)) + 2.5) {
+      music.idx = (music.idx + 1) % PIECES.length; // short pause, then the next piece
+      beginPiece(now + 0.1);
+    }
+  }
+
+  function startMusic() {
+    if (!actx || muted || !music.on || music.playing || document.hidden) return;
+    music.playing = true;
+    const bus = musicBus(), t = actx.currentTime;
+    bus.gain.cancelScheduledValues(t);
+    bus.gain.setValueAtTime(bus.gain.value, t);
+    bus.gain.linearRampToValueAtTime(0.55, t + 1.2);
+    beginPiece(t + 0.15);
+    music.timer = setInterval(scheduleMusic, 100);
+    scheduleMusic();
+  }
+
+  function stopMusic() {
+    if (!music.playing) return;
+    music.playing = false;
+    clearInterval(music.timer);
+    if (actx && music.bus) {
+      const t = actx.currentTime;
+      music.bus.gain.cancelScheduledValues(t);
+      music.bus.gain.setValueAtTime(music.bus.gain.value, t);
+      music.bus.gain.linearRampToValueAtTime(0, t + 0.3);
+    }
+  }
+
+  // Pause when the app is in the background; carry on when it comes back.
+  addEventListener('visibilitychange', () => { if (document.hidden) stopMusic(); else if (actx) audio(); });
+  // iOS only unlocks audio inside certain gestures, so try on these too.
+  for (const evt of ['touchend', 'click', 'keydown']) addEventListener(evt, audio, { passive: true });
 
   /* ================= World building ================= */
   function buildWorld() {
@@ -636,8 +781,21 @@
     muted = !muted;
     try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch (_) { /* ignore */ }
     showMute();
+    if (muted) stopMusic();
     audio();
     sfx.click();
+  });
+  const musicBtn = $('#music');
+  const showMusic = () => {
+    musicBtn.classList.toggle('off', !music.on);
+    musicBtn.setAttribute('aria-pressed', String(music.on));
+  };
+  musicBtn.addEventListener('click', () => {
+    music.on = !music.on;
+    try { localStorage.setItem(MUSIC_KEY, music.on ? '1' : '0'); } catch (_) { /* ignore */ }
+    showMusic();
+    if (!music.on) stopMusic();
+    audio();
   });
   $('#reset').addEventListener('click', () => { if (confirm('Start Pocket Town over? Everything goes back to where it began.')) resetAll(); });
 
@@ -658,6 +816,7 @@
   for (const e of ents) if (e.attachedTo) follow(e);
   applyRooms();
   showMute();
+  showMusic();
   resize();
   addEventListener('resize', resize);
   requestAnimationFrame(tick);

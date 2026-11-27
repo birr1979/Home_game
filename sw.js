@@ -1,5 +1,5 @@
 // Offline support. Bump CACHE whenever you change any file so players get the update.
-const CACHE = 'pocket-town-v1';
+const CACHE = 'pocket-town-v2';
 const ASSETS = [
   './',
   './index.html',

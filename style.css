@@ -171,6 +171,7 @@ html, body {
 }
 .small { width: 44px; height: 44px; font-size: 20px; }
 #tools [hidden] { display: none; }
+#music.off { opacity: .45; text-decoration: line-through; }
 
 #rotate {
   position: fixed; left: 50%; top: max(14px, env(safe-area-inset-top)); transform: translateX(-50%);
